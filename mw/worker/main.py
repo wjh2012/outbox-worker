@@ -36,7 +36,7 @@ def fetch_and_lock(conn):
         cursor.execute("BEGIN IMMEDIATE")  # DB 전체 락
         cursor.execute(
             """
-            SELECT id, gid, path
+            SELECT id, gid, path, created_at
             FROM outbox
             WHERE status='pending'
             ORDER BY created_at
@@ -48,7 +48,7 @@ def fetch_and_lock(conn):
             conn.rollback()
             return None
 
-        id, gid, path = row
+        id, gid, path, created_at = row
         cursor.execute(
             """
             UPDATE outbox
@@ -62,25 +62,11 @@ def fetch_and_lock(conn):
             return None
 
         conn.commit()
-        return id, gid, path
+        return id, gid, path, created_at
     except sqlite3.OperationalError as e:
         print(f"[LOCK ERROR] {e}")
         conn.rollback()
         return None
-
-
-def move_file(src: str, dst: str):
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-
-    if os.path.exists(dst):
-        print(f"[OK] 이미 목적지에 존재 (멱등 처리): {dst}")
-        return dst
-
-    if not os.path.exists(src):
-        raise FileNotFoundError(f"원본 파일이 존재하지 않음: {src}")
-
-    shutil.move(src, dst)
-    print(f"[OK] 파일 이동 완료: {src} -> {dst}")
 
 
 def send_func(path):
@@ -90,6 +76,36 @@ def send_func(path):
     if random.random() < 0.2:
         raise Exception("전송 실패 (네트워크 오류 시뮬레이션)")
     return {"hello": "world"}
+
+
+def file_move(gid, src_path, created_at):
+    try:
+        original_filename = os.path.basename(src_path)
+        _, extension = os.path.splitext(original_filename)
+        unique_filename = f"{gid}{extension}"
+
+        # 파일 이동
+        today_str = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S").strftime(
+            "%Y%m%d"
+        )
+        new_path = os.path.join(IMAGE_SAVE_DIR, today_str)
+        dst_path = os.path.join(new_path, unique_filename)
+
+        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+
+        if os.path.exists(dst_path):
+            print(f"[OK] 이미 목적지에 존재 (멱등 처리): {dst_path}")
+            return dst_path
+
+        if not os.path.exists(src_path):
+            raise FileNotFoundError(f"원본 파일이 존재하지 않음: {dst_path}")
+
+        shutil.move(src_path, dst_path)
+        print(f"[OK] 파일 이동 완료: {src_path} -> {dst_path}")
+        return dst_path
+
+    except Exception as e:
+        print(f"[ERROR]: {e}")
 
 
 def process_outbox(conn, interval=2):
@@ -102,20 +118,11 @@ def process_outbox(conn, interval=2):
             time.sleep(interval)
             continue
 
-        id, gid, path = job
+        id, gid, path, created_at = job
 
         try:
-            original_filename = os.path.basename(path)
-            _, extension = os.path.splitext(original_filename)
-            unique_filename = f"{gid}{extension}"
-
-            # 파일 이동
-            today_str = datetime.now().strftime("%Y%m%d")
-            new_path = os.path.join(IMAGE_SAVE_DIR, today_str)
-            final_dest_path = os.path.join(new_path, unique_filename)
-
-            move_file(path, final_dest_path)
-            response = send_func(final_dest_path)
+            dst_path = file_move(gid, path, created_at)
+            response = send_func(dst_path)
 
             # ---- 결과를 DB에 짧게 반영 ----
             conn.execute("BEGIN IMMEDIATE")
