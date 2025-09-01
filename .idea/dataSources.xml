@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="dni-ai-ocr@10.1.1.2" uuid="e5114ba7-98a6-4319-b8d1-f87154211011">
-      <driver-ref>postgresql</driver-ref>
+    <data-source source="LOCAL" name="outbox.db" uuid="410b02c5-6747-4ac6-9ca2-6c865c29a85f">
+      <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
-      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://10.1.1.2:5432/dni-ai-ocr</jdbc-url>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/outbox.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>
