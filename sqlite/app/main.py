@@ -2,6 +2,18 @@ import sqlite3
 import time
 import uuid
 
+DB_PATH = "outbox.db"
+
+
+def make_conn(path=DB_PATH):
+    conn = sqlite3.connect(path, check_same_thread=False, timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except Exception:
+        pass
+    return conn
+
 
 def save_event(conn, gid, path):
     with conn:  # 자동 BEGIN / COMMIT / ROLLBACK
@@ -30,6 +42,7 @@ def init_db(conn):
             path TEXT NOT NULL,
             payload TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            
         );
         """
     )
@@ -44,7 +57,11 @@ def init_db(conn):
             locked_by TEXT,
             locked_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            processed_at TIMESTAMP
+            processed_at TIMESTAMPnext_retry_at TEXT,
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 5,
+            next_retry_at EXT DEFAULT NULL,
+            last_error TEXT DEFAULT NULL
         );
         """
     )
@@ -54,11 +71,9 @@ def init_db(conn):
     conn.commit()
 
 
-if __name__ == "__main__":
-    conn = sqlite3.connect("outbox.db", check_same_thread=False)
-
+def mock_app():
+    conn = make_conn()
     init_db(conn)
-
     while True:
         save_event(
             conn,
@@ -75,4 +90,8 @@ if __name__ == "__main__":
             uuid.uuid4().hex,
             "def/def",
         )
-        time.sleep(0.1)
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    mock_app()
